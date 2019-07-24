@@ -4,6 +4,11 @@ import re
 from nltk.stem import WordNetLemmatizer
 from nltk.corpus import wordnet as wn
 
+names = set()
+with open('names.txt', 'r') as f:
+    for line in f:
+        names.add(line.rstrip())
+
 patchWords = set()
 with open('patch.txt', 'r') as f:
     for line in f:
@@ -34,10 +39,10 @@ for note in notes:
     for word in wordsInNote:
         # Only consider the words in which only the first letter is capitalized while checking the list of common words. This is because
         # these are the only canditates for being names.
-        m = re.search(r'[A-Z][a-z]+', word)
+        m = re.search(r'([A-Z][a-z]+)(.*)', word)
         if m:
         # group(0) returns the entire match.
-            stemWord = m.group(0)
+            stemWord = m.group(1)
         else:
             stemWord = ''
 #        print('word', word)
@@ -54,20 +59,22 @@ for note in notes:
 #	print(set(antonyms))
         if (
             stemWord and
-            stemWord.lower() not in commonWords and
-            stemWord.lower() not in patchWords and
-            not set(synonyms) & commonWords and
+            stemWord.lower() in names or
+            (
+                stemWord.lower() not in commonWords and
+                stemWord.lower() not in patchWords and
+                not set(synonyms) & commonWords and
 #            not set(antonyms) & h and
-            # Removed 'a' coz of Tonal!
-            (not wn.synsets(stemWord) or wn.synsets(stemWord)[0].pos() not in ('r','v')) and
-#            (not wn.synsets(stemWord) or all([synset.pos() not in ('a','r','v') for synset in wn.synsets(stemWord)])) and
+#            (not wn.synsets(stemWord) or wn.synsets(stemWord)[0].pos() not in ('r','v')) and
+                (not wn.synsets(stemWord) or any([synset.pos() == 'n' for synset in wn.synsets(stemWord)])) and
 #            lmtr.lemmatize(stemWord.lower(), pos='v') == stemWord.lower() and
-            # Ignores common nouns which occur as plurals. The singular form is likely included in the list of common words.
-            len(lmtr.lemmatize(stemWord.lower(), pos='n')) == len(stemWord)
+                # Ignores common nouns which occur as plurals. The singular form is likely included in the list of common words.
+                len(lmtr.lemmatize(stemWord.lower(), pos='n')) == len(stemWord)
+            )
         ):
             # Suggestion: compare stemWord with word, and append the punctuation to the [NAME] token.
-            namesRemoved.append('[NAME]')
-            namesList.append(stemWord)
+            namesRemoved.append('[NAME]' + m.group(2))
+            namesList.append(word)
         else:
             namesRemoved.append(word)
     # namesRemoved is the list of tokens with the names redacted. This statement creates sentences from them by including spaces between
