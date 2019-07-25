@@ -20,7 +20,8 @@ with open('commonWords.txt', 'r') as f:
         commonWords.add(line.rstrip())
 
 #workbook = xlrd.open_workbook('fakeSessionNotes_dummyFile.xlsx')
-workbook = xlrd.open_workbook('AllData_sample.xlsx')
+#workbook = xlrd.open_workbook('AllData_sample.xlsx')
+workbook = xlrd.open_workbook('AllData.xlsx')
 worksheet = workbook.sheet_by_index(0)
 nrows = worksheet.nrows
 ncols = worksheet.ncols
@@ -39,10 +40,10 @@ for note in notes:
     for word in wordsInNote:
         # Only consider the words in which only the first letter is capitalized while checking the list of common words. This is because
         # these are the only canditates for being names.
-        m = re.search(r'([A-Z][a-z]+)(.*)', word)
+        m = re.search(r'[A-Z][a-z]+', word)
         if m:
         # group(0) returns the entire match.
-            stemWord = m.group(1)
+            stemWord = m.group(0)
         else:
             stemWord = ''
 #        print('word', word)
@@ -51,7 +52,7 @@ for note in notes:
 #        antonyms = []
         for syn in wn.synsets(stemWord):
             for l in syn.lemmas():
-                synonyms.append(l.name())
+                synonyms.append(l.name().lower())
 #                if l.antonyms():
 #                    antonyms.append(l.antonyms()[0].name())
 
@@ -66,15 +67,15 @@ for note in notes:
                 not set(synonyms) & commonWords and
 #            not set(antonyms) & h and
 #            (not wn.synsets(stemWord) or wn.synsets(stemWord)[0].pos() not in ('r','v')) and
-                (not wn.synsets(stemWord) or any([synset.pos() == 'n' for synset in wn.synsets(stemWord)])) and
-#            lmtr.lemmatize(stemWord.lower(), pos='v') == stemWord.lower() and
+                (not wn.synsets(stemWord) or all([synset.pos() == 'n' for synset in wn.synsets(stemWord)])) and
+                lmtr.lemmatize(stemWord.lower(), pos='v') == stemWord.lower() and
                 # Ignores common nouns which occur as plurals. The singular form is likely included in the list of common words.
                 len(lmtr.lemmatize(stemWord.lower(), pos='n')) == len(stemWord)
             )
         ):
             # Suggestion: compare stemWord with word, and append the punctuation to the [NAME] token.
-            namesRemoved.append('[NAME]' + m.group(2))
-            namesList.append(word)
+            namesRemoved.append('[NAME]')
+            namesList.append(stemWord)
         else:
             namesRemoved.append(word)
     # namesRemoved is the list of tokens with the names redacted. This statement creates sentences from them by including spaces between
@@ -84,6 +85,8 @@ for note in notes:
     print(outputNote)
     print()
 print('total number of words labeled as names : ', len(namesList))
-print(namesList)
+print('total number of distinct words labeled as names : ', len(set(namesList)))
+from collections import Counter
+print(Counter(namesList))
 
 
