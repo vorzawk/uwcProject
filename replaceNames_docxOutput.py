@@ -3,6 +3,8 @@ import string
 import re
 from nltk.stem import WordNetLemmatizer
 from nltk.corpus import wordnet as wn
+from docx import Document
+from docx.shared import RGBColor
 
 names = set()
 with open('names.txt', 'r') as f:
@@ -26,14 +28,32 @@ worksheet = workbook.sheet_by_index(0)
 nrows = worksheet.nrows
 ncols = worksheet.ncols
 
+document = Document()
+document.add_heading('Redacted Notes', level=1)
+p = document.add_paragraph()
+p.add_run('This document contains session notes with names redacted by a program. The words identified as names by the program are denoted by ')
+p.add_run('[NAME]').font.color.rgb = RGBColor(255,0,0)
+p.add_run(' tokens.')
+p = document.add_paragraph()
+p.add_run('The program also suggests words which it thinks could be names. These words are not redacted but indicated in ')
+p.add_run('blue').font.color.rgb = RGBColor(0,0,255)
+p.add_run(' color.')
+table = document.add_table(rows=40000, cols=1)
+
 namesList = []
+namesCandidates = []
 # Bad code, hardcoding the column in which the data is present
 # But this will do for now!
 notes = worksheet.col(0, start_rowx=0)
 lmtr = WordNetLemmatizer()
-for note in notes:
+note_count = 0
+for note, row in zip(notes, table.rows):
+    note_count += 1
+    print(note_count)
 #    print('Original Note:\n', note.value)
 #    print(note.value)
+#    row = table.add_row()
+    p = row.cells[0].add_paragraph()
     wordsInNote = note.value.split()
 #    print(wordsInNote)
     namesRemoved = []
@@ -57,7 +77,9 @@ for note in notes:
 #                    antonyms.append(l.antonyms()[0].name())
 
 #       print(set(synonyms))
-#	print(set(antonyms))
+        redact = False
+        suggest = False
+        # liberal algorithm : identifies namesCandidates, used to suggest redactions.
         if (
             stemWord and
             stemWord.lower() in names or
@@ -65,28 +87,50 @@ for note in notes:
                 stemWord.lower() not in commonWords and
                 stemWord.lower() not in patchWords and
                 not set(synonyms) & commonWords and
-#            not set(antonyms) & h and
+                lmtr.lemmatize(stemWord.lower(), pos='v') == stemWord.lower() and
+                # Ignores common nouns which occur as plurals. The singular form is likely included in the list of common words.
+                len(lmtr.lemmatize(stemWord.lower(), pos='n')) == len(stemWord)
+            )
+        ):
+            namesCandidates.append(stemWord)
+            suggest = True
+
+# conservative algorithm : actually redacts the words
+        if (
+            stemWord and
+            stemWord.lower() in names or
+            (
+                stemWord.lower() not in commonWords and
+                stemWord.lower() not in patchWords and
+                not set(synonyms) & commonWords and
+#                not set(antonyms) & h and
 #            (not wn.synsets(stemWord) or wn.synsets(stemWord)[0].pos() not in ('r','v')) and
+#                (not wn.synsets(stemWord) or all([synset.pos() == 'n' for synset in wn.synsets(stemWord)])) and
                 (not wn.synsets(stemWord) or all([synset.pos() == 'n' for synset in wn.synsets(stemWord)])) and
                 lmtr.lemmatize(stemWord.lower(), pos='v') == stemWord.lower() and
                 # Ignores common nouns which occur as plurals. The singular form is likely included in the list of common words.
                 len(lmtr.lemmatize(stemWord.lower(), pos='n')) == len(stemWord)
             )
         ):
-            # Suggestion: compare stemWord with word, and append the punctuation to the [NAME] token.
-            namesRemoved.append('[NAME]')
             namesList.append(stemWord)
+            redact = True
+
+        if redact:
+            p.add_run('[NAME] ').font.color.rgb = RGBColor(255,0,0)
+        elif suggest:
+            p.add_run(word + ' ').font.color.rgb = RGBColor(0,0,255)
         else:
-            namesRemoved.append(word)
-    # namesRemoved is the list of tokens with the names redacted. This statement creates sentences from them by including spaces between
-    # them.
-    outputNote = ' '.join(namesRemoved)
-#    print('Redacted Note: \n', outputNote)
-    print(outputNote)
-    print()
+            p.add_run(word + ' ')
+
+#document.save('AllDataSample_redacted.docx')
+document.save('AllData_redacted.docx')
 print('total number of words labeled as names : ', len(namesList))
 print('total number of distinct words labeled as names : ', len(set(namesList)))
 from collections import Counter
 print(Counter(namesList))
+print('total number of words suggested as names : ', len(namesCandidates))
+print('total number of distinct words suggested as names : ', len(set(namesCandidates)))
+print(Counter(namesCandidates))
+
 
 
